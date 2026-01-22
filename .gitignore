@@ -1,0 +1,6 @@
+# .gitignore 内容
+.env
+arxiv_mind_qwen.db
+last_batch_id.txt
+__pycache__/
+*.jsonl

@@ -1,0 +1,11 @@
+sqlalchemy
+openai
+arxiv
+pymupdf
+requests
+resend
+streamlit
+python-dotenv
+pandas
+plotly
+backoff
