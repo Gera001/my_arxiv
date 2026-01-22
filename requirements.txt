@@ -1,11 +1,11 @@
+streamlit
 sqlalchemy
 openai
 arxiv
-pymupdf
 requests
-resend
-streamlit
-python-dotenv
-pandas
-plotly
+pymupdf
 backoff
+python-dotenv
+resend
+plotly
+pandas

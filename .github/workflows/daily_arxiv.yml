@@ -1,0 +1,51 @@
+name: ArxivMind Daily Pipeline
+
+on:
+  schedule:
+    # 北京时间每天 0:00 运行 (UTC 16:00)
+    - cron: '0 16 * * *'
+  workflow_dispatch: # 允许在 GitHub 网页上手动点击按钮触发
+
+jobs:
+  daily_sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # 确保你有一个 requirements.txt，如果没有，请参考下面的内容
+          pip install -r requirements.txt
+
+      - name: Run Daily Automation
+        env:
+          # 这些敏感信息需要在 GitHub 仓库的 Settings -> Secrets and variables -> Actions 中配置
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          python automation_trigger.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add arxiv_mind_qwen.db
+          git commit -m "Auto update database [skip ci]" || echo "No changes to commit"
+          git push
+
+      # [注意] 关于 SQLite 数据库的持久化问题：
+      # GitHub Actions 每次运行都是全新的环境，运行完文件会被销毁。
+      # 如果你使用的是本地 sqlite.db，每次运行完数据都会丢失！
+      # 解决方案：
+      # 1. (推荐) 使用云数据库 (如 Supabase, Neon, TiDB Cloud 免费版)，修改 database.py 连接字符串。
+      # 2. (不推荐但可行) 将 sqlite.db commit 回仓库（容易冲突）。
+
+      # 以下是方案2：将更新后的 DB 提交回仓库（仅作演示，慎用）
