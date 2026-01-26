@@ -47,6 +47,58 @@ st.markdown("""
     }
 
     /* --- 登录页组件 --- */
+    /* 呼吸球容器 */
+    .blob-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    /* 呼吸球本体 */
+    .blob {
+        width: 100px;
+        height: 100px;
+        /* 渐变色：使用你的主题色 #D4A373 搭配浅一点的颜色 */
+        background: linear-gradient(135deg, #D4A373 0%, #E6C29F 100%);
+        /* 初始形状 */
+        border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+        /* 阴影让它更有立体感 */
+        box-shadow: 0 10px 20px rgba(212, 163, 115, 0.4);
+        /* 动画定义：名称 时长 循环 缓动 */
+        animation: blob-anim 6s linear infinite; 
+        transition: all 0.5s ease;
+    }
+
+    /* 鼠标悬停时的互动效果 */
+    .blob:hover {
+        transform: scale(1.1);
+        box-shadow: 0 15px 25px rgba(212, 163, 115, 0.6);
+    }
+
+    /* 关键帧动画：控制形状变换和位置微调 */
+    @keyframes blob-anim {
+        0% {
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            transform: translateY(0);
+        }
+        25% {
+            border-radius: 58% 42% 75% 25% / 76% 46% 54% 24%;
+            transform: translateY(-5px);
+        }
+        50% {
+            border-radius: 50% 50% 33% 67% / 55% 27% 73% 45%;
+            transform: translateY(0);
+        }
+        75% {
+            border-radius: 33% 67% 58% 42% / 63% 68% 32% 37%;
+            transform: translateY(5px);
+        }
+        100% {
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            transform: translateY(0);
+        }
+    }
     .login-wrapper {
         display: flex;
         justify-content: center;
@@ -196,7 +248,12 @@ def show_login_page():
     col1, col2, col3 = st.columns([1, 1.2, 1])
 
     with col2:
-        st.markdown("<div class='login-wrapper'><div class='login-card'>", unsafe_allow_html=True)
+        # st.markdown("<div class='login-wrapper'><div class='login-card'>", unsafe_allow_html=True)
+        st.markdown("""
+            <div class='blob-container'>
+                <div class='blob'></div>
+            </div>
+        """, unsafe_allow_html=True)
 
         st.markdown("### 欢迎回来")
         st.markdown("<p style='color:#999; font-size:14px;'>请使用邮箱验证码登录</p>", unsafe_allow_html=True)
