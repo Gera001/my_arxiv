@@ -499,3 +499,14 @@ def get_trending_papers(limit: int = 5) -> list[Paper]:
         return papers
     finally:
         session.close()
+
+def get_user_favorite_ids(email: str) -> set[int]:
+    """一次性获取用户收藏的所有论文 ID"""
+    session = Session()
+    try:
+        user = session.query(User).filter_by(email=email).first()
+        if user:
+            return {p.id for p in user.favorite_papers} # 返回 ID 集合
+        return set()
+    finally:
+        session.close()
