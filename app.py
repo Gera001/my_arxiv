@@ -412,9 +412,6 @@ def show_paper_list():
 
     # --- 渲染列表 ---
     # <span>🔗 引用: {p.citation_count or 0}</span>
-    session = Session()
-    papers = session.query(Paper).filter(Paper.batch_status == "completed").limit(20).all()
-    session.close()
     my_fav_ids = get_user_favorite_ids(st.session_state.user_email)
     for p in papers:
         # is_fav = is_paper_favorited(st.session_state.user_email, p.id)
