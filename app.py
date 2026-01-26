@@ -16,6 +16,9 @@ from services import (
     get_all_categories,
     get_earliest_paper_date,
     get_recent_donations,
+    add_comment,
+    get_paper_comments,
+    get_trending_papers,
     AVAILABLE_CATEGORIES
 )
 
@@ -248,7 +251,7 @@ def show_sidebar():
         st.markdown("### 📍 导航")
         page = st.radio(
             "选择页面",
-            ["📊 论文看板", "📑 论文浏览", "⭐ 我的收藏", "📬 订阅设置", "💰 打赏支持"],
+            ["📊 论文看板", "🔥 热门榜单", "📑 论文浏览", "⭐ 我的收藏", "📬 订阅设置", "💰 打赏支持"],
             label_visibility="collapsed"
         )
 
@@ -407,11 +410,16 @@ def show_paper_list():
     st.divider()
 
     # --- 渲染列表 ---
+    # <span>🔗 引用: {p.citation_count or 0}</span>
     for p in papers:
         is_fav = is_paper_favorited(st.session_state.user_email, p.id)
 
+        # 获取该论文的所有评论
+        comments = get_paper_comments(p.id)
+        comment_count = len(comments)
+
         with st.container():
-            col1, col2 = st.columns([20, 1])
+            col1, col2 = st.columns([20, 1.5])
 
             with col1:
                 # 1. 准备科普内容 (注意：去掉了多行字符串的缩进，防止被识别为代码块)
@@ -432,8 +440,7 @@ def show_paper_list():
     <div class='paper-title'>{p.title}</div>
     <div class='paper-meta'>
         <span class='category-tag'>{p.category or '未分类'}</span>
-        <span>📅 {p.publish_date.strftime('%Y-%m-%d')}</span>
-        <span>🔗 引用: {p.citation_count or 0}</span>
+        <span>📅 {p.created_at.strftime('%Y-%m-%d')}</span>
     </div>
     {pop_science_html}
     {keywords_html}
@@ -453,6 +460,114 @@ def show_paper_list():
                     if success:
                         st.toast(msg)
                         st.rerun()
+
+            # --- 新增：评论交互区 (放在 expander 里) ---
+            # 标题显示评论数量
+            with st.expander(f"💬 讨论与评论 ({comment_count})"):
+
+                # 1. 显示历史评论
+                if comments:
+                    for c in comments:
+                        # 简单的头像占位符和脱敏邮箱
+                        c_email = mask_email(c['user_email'])
+                        c_time = c['created_at'].strftime('%Y-%m-%d %H:%M')
+
+                        st.markdown(f"""
+                        <div style='background:#f1f1f1; padding:10px; border-radius:8px; margin-bottom:8px; font-size:14px;'>
+                            <div style='color:#D4A373; font-weight:bold; font-size:12px;'>
+                                👤 {c_email} <span style='color:#aaa; font-weight:normal; margin-left:8px;'>{c_time}</span>
+                            </div>
+                            <div style='margin-top:4px; color:#333;'>{c['content']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.caption("暂无评论，快来抢沙发吧~")
+
+                # 2. 发送新评论
+                # 使用 form 可以让用户按回车发送，且避免每个字符输入都刷新页面
+                with st.form(key=f"comment_form_{p.id}", clear_on_submit=True):
+                    new_comment_text = st.text_area("发表你的观点...", height=60, placeholder="这篇论文的方法很有趣...")
+                    submit_col1, submit_col2 = st.columns([5, 1])
+                    with submit_col2:
+                        submitted = st.form_submit_button("发送 🚀")
+
+                    if submitted:
+                        if new_comment_text:
+                            success, msg = add_comment(st.session_state.user_email, p.id, new_comment_text)
+                            if success:
+                                st.toast("评论已发布！")
+                                st.rerun()  # 刷新页面显示新评论
+                            else:
+                                st.error(msg)
+                        else:
+                            st.warning("写点什么再发送吧")
+
+                # --- 新增功能：学术工具栏 ---
+                with st.expander("🤖 AI 论文助手 & 工具"):
+                    # 工具 1: BibTeX
+                    # st.markdown("#### 📝 引用工具")
+                    # bib_code = generate_bibtex(p)
+                    # st.code(bib_code, language="latex")
+                    #
+                    # st.divider()
+
+                    # 工具 2: Paper Chat
+                    st.markdown("#### 💬 向 AI 提问")
+                    st.caption("基于 AI 对本文的深度分析记录进行回答")
+
+                    # 为每篇论文维护独立的聊天记录
+                    chat_key = f"chat_history_{p.id}"
+                    if chat_key not in st.session_state:
+                        st.session_state[chat_key] = []
+
+                    # 显示历史消息
+                    for msg in st.session_state[chat_key]:
+                        with st.chat_message(msg["role"]):
+                            st.markdown(msg["content"])
+
+                    # 输入框
+                    if prompt := st.chat_input(f"关于《{p.title[:10]}...》的问题", key=f"input_{p.id}"):
+                        # 1. 显示用户提问
+                        st.session_state[chat_key].append({"role": "user", "content": prompt})
+                        with st.chat_message("user"):
+                            st.markdown(prompt)
+
+                        # 2. 构建上下文并调用 AI
+                        with st.chat_message("assistant"):
+                            with st.spinner("AI 正在思考..."):
+                                # 构建上下文：将论文的已有分析结果喂给 AI
+                                context = f"""
+                                你是一个学术助手。用户正在阅读论文《{p.title}》。
+                                以下是该论文的核心信息：
+                                - 领域：{p.category}
+                                - 动机：{p.analysis_json.get('motivation', '未知')}
+                                - 方法：{p.analysis_json.get('method', '未知')}
+                                - 结果：{p.analysis_json.get('result', '未知')}
+                                - 科普总结：{p.popular_science}
+
+                                请基于以上信息回答用户的问题：{prompt}
+                                如果问题超出了上述信息范围，请礼貌告知需要阅读原文。
+                                """
+
+                                # 调用 core_batch 里的同步调用函数
+                                # 注意：call_qwen_ai_sync 原本返回 JSON，我们这里需要它返回普通文本
+                                # 建议修改 core_batch.py 或者在这里做一个简单的临时处理
+                                # 这里假设我们复用 call_qwen_ai_sync 但它返回的是 JSON 字符串
+                                # 为了更自然，建议在 core_batch.py 加一个简单的 call_qwen_chat
+
+                                from core_batch import client  # 直接调用 OpenAI 客户端更灵活
+
+                                try:
+                                    resp = client.chat.completions.create(
+                                        model="qwen-plus",
+                                        messages=[{"role": "user", "content": context}],
+                                        # 不强制 JSON，普通对话模式
+                                    )
+                                    answer = resp.choices[0].message.content
+                                    st.markdown(answer)
+                                    st.session_state[chat_key].append({"role": "assistant", "content": answer})
+                                except Exception as e:
+                                    st.error(f"AI 服务繁忙: {e}")
 
             # 详情折叠栏
             with st.expander("🧐 查看 AI 深度技术分析"):
@@ -611,6 +726,31 @@ def show_donate_page():
         st.caption("注：打赏时备注邮箱即可上榜，数据将定期录入。")
 
 
+def show_trending():
+    """显示热门榜单"""
+    st.markdown("## 🔥 本周热门论文 Top 5")
+    st.markdown("基于社区收藏量与讨论热度实时生成。")
+    st.divider()
+
+    papers = get_trending_papers(limit=5)
+
+    if not papers:
+        st.info("数据积累中，暂无榜单。")
+        return
+
+    for idx, p in enumerate(papers):
+        col_rank, col_content = st.columns([1, 10])
+        with col_rank:
+            st.markdown(f"<h1 style='color:#D4A373; text-align:center;'>{idx + 1}</h1>", unsafe_allow_html=True)
+
+        with col_content:
+            st.markdown(f"### {p.title}")
+            st.caption(f"发布日期: {p.created_at.strftime('%Y-%m-%d')} | 领域: {p.category}")
+            st.markdown(f"_{p.popular_science[:100]}..._")
+            st.link_button("👉 前往阅读", p.url)
+
+        st.markdown("---")
+
 def main():
     """主函数入口"""
     if not st.session_state.get('authenticated', False):
@@ -621,6 +761,8 @@ def main():
 
     if page == "📊 论文看板":
         show_dashboard()
+    elif page == "🔥 热门榜单":
+        show_trending()
     elif page == "📑 论文浏览":
         show_paper_list()
     elif page == "⭐ 我的收藏":

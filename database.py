@@ -1,9 +1,13 @@
 import logging
+import os
 # 1. 引入 timezone
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, Boolean, ForeignKey, Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,7 +19,9 @@ Base = declarative_base()
 
 # 2. 定义一个获取当前 UTC 时间的辅助函数
 def get_utc_now():
-    return datetime.now(timezone.utc)
+    # 创建一个 UTC+8 的时区对象
+    beijing_tz = timezone(timedelta(hours=8))
+    return datetime.now(beijing_tz)
 
 user_favorites = Table(
     'user_favorites',
@@ -81,7 +87,37 @@ class Donation(Base):
     created_at = Column(DateTime, default=get_utc_now)
 
 
-engine = create_engine('sqlite:///arxiv_mind_qwen.db')
+class Comment(Base):
+    __tablename__ = 'comments'
+    id = Column(Integer, primary_key=True)
+    content = Column(Text, nullable=False)  # 评论内容
+    created_at = Column(DateTime, default=get_utc_now)  # 评论时间
+
+    # 外键关联
+    user_id = Column(Integer, ForeignKey('users.id'))
+    paper_id = Column(Integer, ForeignKey('papers.id'))
+
+    # 关系属性 (方便查询)
+    user = relationship("User", backref="comments")
+    paper = relationship("Paper", backref="comments")
+
+
+# engine = create_engine('sqlite:///arxiv_mind_qwen.db')
+# Base.metadata.create_all(engine)
+# Session = sessionmaker(bind=engine)
+# logger.info("Database & Models initialized.")
+# 优先读取环境变量中的 DATABASE_URL，如果没有则回退到本地 SQLite (方便本地测试)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL and DATABASE_URL.startswith("postgres"):
+    # SQLAlchemy 需要 postgresql:// 开头，有些云厂商提供的是 postgres://
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://")
+    engine = create_engine(DATABASE_URL)
+else:
+    # 本地测试继续用 SQLite
+    print("⚠️ 未检测到 DATABASE_URL，使用本地 SQLite 模式")
+    engine = create_engine('sqlite:///arxiv_mind_qwen.db')
+
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 logger.info("Database & Models initialized.")

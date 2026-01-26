@@ -1,10 +1,12 @@
 import os
 import random
 import resend
-from database import Session, Paper, User, VerificationCode, Donation, logger
+from database import Session, Paper, User, VerificationCode, Donation, Comment, logger, user_favorites
 from sqlalchemy import func
 from datetime import datetime, timedelta, date, timezone  # 确保导入了 date
+from dotenv import load_dotenv
 
+load_dotenv()
 resend.api_key = os.getenv("RESEND_API_KEY")
 
 # 可配置的领域列表
@@ -342,7 +344,7 @@ def get_papers_by_category(category: str = None, target_date: date = None) -> li
             # 方法：筛选 publish_date 在当天的 00:00:00 到 23:59:59 之间
             start_of_day = datetime.combine(target_date, datetime.min.time())
             end_of_day = datetime.combine(target_date, datetime.max.time())
-            query = query.filter(Paper.publish_date >= start_of_day, Paper.publish_date <= end_of_day)
+            query = query.filter(Paper.created_at >= start_of_day, Paper.created_at <= end_of_day)
 
         # 默认按发布时间降序
         papers = query.order_by(Paper.publish_date.desc()).all()
@@ -361,7 +363,7 @@ def get_earliest_paper_date() -> date:
     session = Session()
     try:
         # 获取最早的 publish_date
-        min_date = session.query(func.min(Paper.publish_date)).scalar()
+        min_date = session.query(func.min(Paper.created_at)).scalar()
         if min_date:
             return min_date.date()
         # 如果数据库为空，默认返回今天
@@ -406,5 +408,94 @@ def add_donation_record(email: str, amount: str, message: str = None, date_time:
         logger.error(f"添加打赏失败: {e}")
         session.rollback()
         return False
+    finally:
+        session.close()
+
+
+def add_comment(user_email: str, paper_id: int, content: str) -> tuple[bool, str]:
+    """添加评论"""
+    if not content or not content.strip():
+        return False, "评论内容不能为空"
+
+    session = Session()
+    try:
+        user = session.query(User).filter_by(email=user_email).first()
+        if not user:
+            return False, "用户未找到"
+
+        new_comment = Comment(
+            user_id=user.id,
+            paper_id=paper_id,
+            content=content.strip()
+        )
+        session.add(new_comment)
+        session.commit()
+        logger.info(f"用户 {user_email} 评论了论文 {paper_id}")
+        return True, "评论发布成功"
+    except Exception as e:
+        logger.error(f"评论失败: {e}")
+        session.rollback()
+        return False, "评论发布失败"
+    finally:
+        session.close()
+
+
+def get_paper_comments(paper_id: int) -> list[dict]:
+    """获取指定论文的评论列表 (按时间倒序)"""
+    session = Session()
+    try:
+        # 预加载 user 信息以避免 N+1 查询问题
+        from sqlalchemy.orm import joinedload
+        comments = session.query(Comment) \
+            .options(joinedload(Comment.user)) \
+            .filter(Comment.paper_id == paper_id) \
+            .order_by(Comment.created_at.desc()) \
+            .all()
+
+        # 转换为字典列表返回，避免 session 关闭后无法访问
+        result = []
+        for c in comments:
+            result.append({
+                'user_email': c.user.email if c.user else 'Unknown',
+                'content': c.content,
+                'created_at': c.created_at
+            })
+        return result
+    finally:
+        session.close()
+
+
+def get_trending_papers(limit: int = 5) -> list[Paper]:
+    """
+    获取热门论文排行榜
+    算法：热度 = 收藏数 * 2 + 评论数 * 1
+    """
+    session = Session()
+    try:
+        # 子查询：统计评论数
+        comment_counts = session.query(
+            Comment.paper_id,
+            func.count(Comment.id).label('c_count')
+        ).group_by(Comment.paper_id).subquery()
+
+        # 子查询：统计收藏数
+        fav_counts = session.query(
+            user_favorites.c.paper_id,
+            func.count(user_favorites.c.user_id).label('f_count')
+        ).group_by(user_favorites.c.paper_id).subquery()
+
+        # 关联查询并排序
+        # 注意：这里使用 outerjoin 因为有的论文可能没有评论或收藏
+        papers = session.query(Paper) \
+            .outerjoin(comment_counts, Paper.id == comment_counts.c.paper_id) \
+            .outerjoin(fav_counts, Paper.id == fav_counts.c.paper_id) \
+            .filter(Paper.batch_status == 'completed') \
+            .order_by((func.coalesce(fav_counts.c.f_count, 0) * 2 + func.coalesce(comment_counts.c.c_count, 0)).desc()) \
+            .limit(limit) \
+            .all()
+
+        for p in papers:
+            session.expunge(p)
+        return papers
     finally:
         session.close()

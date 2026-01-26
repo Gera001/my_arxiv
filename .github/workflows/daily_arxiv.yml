@@ -30,16 +30,17 @@ jobs:
           # 这些敏感信息需要在 GitHub 仓库的 Settings -> Secrets and variables -> Actions 中配置
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           python automation_trigger.py
 
-      - name: Commit and push changes
-        run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
-          git add arxiv_mind_qwen.db
-          git commit -m "Auto update database [skip ci]" || echo "No changes to commit"
-          git push
+#      - name: Commit and push changes
+#        run: |
+#          git config --global user.name 'GitHub Action'
+#          git config --global user.email 'action@github.com'
+#          git add arxiv_mind_qwen.db
+#          git commit -m "Auto update database [skip ci]" || echo "No changes to commit"
+#          git push
 
       # [注意] 关于 SQLite 数据库的持久化问题：
       # GitHub Actions 每次运行都是全新的环境，运行完文件会被销毁。

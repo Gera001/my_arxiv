@@ -46,6 +46,11 @@ def get_semantic_scholar_free(arxiv_id: str) -> dict | None:
         logger.error(f"Semantic Scholar 数据同步异常 ({arxiv_id}): {e}")
     return None
 
+def clean_text_for_db(text: str) -> str:
+    """清洗文本，移除 PostgreSQL 不支持的 NUL 字符"""
+    if not text:
+        return text
+    return text.replace("\x00", "")
 
 def fetch_new_papers():
     """抓取 Arxiv 最新论文"""
@@ -53,7 +58,7 @@ def fetch_new_papers():
     arxiv_client = arxiv.Client()
     search = arxiv.Search(
         query="cat:cs.AI",
-        max_results=100,
+        max_results=10,
         sort_by=arxiv.SortCriterion.SubmittedDate
     )
 
@@ -81,7 +86,7 @@ def fetch_new_papers():
                 title=result.title,
                 url=result.pdf_url,
                 publish_date=result.published,
-                full_text_tmp=text,
+                full_text_tmp=clean_text_for_db(text),
                 citation_count=ss_data.get('citationCount', 0),
                 influential_citation_count=ss_data.get('influentialCitationCount', 0),
                 # 标记该字段为空，表示待分析（或者你可以保留 batch_status 字段并设为 pending）
