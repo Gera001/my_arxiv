@@ -546,7 +546,7 @@ def show_paper_list():
                                 - 动机：{p.analysis_json.get('motivation', '未知')}
                                 - 方法：{p.analysis_json.get('method', '未知')}
                                 - 结果：{p.analysis_json.get('result', '未知')}
-                                - 科普总结：{p.popular_science}
+                                - 全文内容：{p.full_text_tmp[:28000]}
 
                                 请基于以上信息回答用户的问题：{prompt}
                                 如果问题超出了上述信息范围，请礼貌告知需要阅读原文。
