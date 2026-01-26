@@ -9,4 +9,4 @@ python-dotenv
 resend
 plotly
 pandas
-psycopg2
+psycopg2-binary
