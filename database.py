@@ -1,5 +1,6 @@
 import logging
 import os
+import streamlit as st 
 # 1. 引入 timezone
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, Boolean, ForeignKey, Table
@@ -109,15 +110,21 @@ class Comment(Base):
 # 优先读取环境变量中的 DATABASE_URL，如果没有则回退到本地 SQLite (方便本地测试)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-if DATABASE_URL and DATABASE_URL.startswith("postgres"):
-    # SQLAlchemy 需要 postgresql:// 开头，有些云厂商提供的是 postgres://
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://")
-    engine = create_engine(DATABASE_URL)
-else:
-    # 本地测试继续用 SQLite
-    print("⚠️ 未检测到 DATABASE_URL，使用本地 SQLite 模式")
-    engine = create_engine('sqlite:///arxiv_mind_qwen.db')
+@st.cache_resource  # <--- 关键：告诉 Streamlit 把这个连接缓存起来，不要每次都重建
+def get_db_engine():
+    url = os.getenv("DATABASE_URL")
+    if url and url.startswith("postgres"):
+        url = url.replace("postgres://", "postgresql://")
+        # 加上 pool_pre_ping=True 防止连接因为长时间空闲断开
+        return create_engine(url, pool_pre_ping=True)
+    else:
+        print("⚠️ 使用本地 SQLite 模式")
+        return create_engine('sqlite:///arxiv_mind_qwen.db')
 
+# 获取全局唯一的 engine
+engine = get_db_engine()
+
+# 确保表存在
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 logger.info("Database & Models initialized.")
