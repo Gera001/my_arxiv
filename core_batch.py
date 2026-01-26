@@ -58,7 +58,7 @@ def fetch_new_papers():
     arxiv_client = arxiv.Client()
     search = arxiv.Search(
         query="cat:cs.AI",
-        max_results=50,
+        max_results=20,
         sort_by=arxiv.SortCriterion.SubmittedDate
     )
 
@@ -196,7 +196,7 @@ def process_pending_papers_parallel():
                     # 完成后状态流转
                     p.batch_status = "completed"
                     # 清空临时大文本
-                    p.full_text_tmp = None
+                    # p.full_text_tmp = None
 
                     update_session.commit()
                     success_count += 1
