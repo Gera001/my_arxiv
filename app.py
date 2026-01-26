@@ -19,6 +19,7 @@ from services import (
     add_comment,
     get_paper_comments,
     get_trending_papers,
+    get_user_favorite_ids,
     AVAILABLE_CATEGORIES
 )
 
