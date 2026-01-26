@@ -80,7 +80,8 @@ def fetch_new_papers():
 
             # 2. 调用免费版 SS 获取引用
             arxiv_id = result.entry_id.split('/')[-1]
-            ss_data = get_semantic_scholar_free(arxiv_id) or {}
+            # ss_data = get_semantic_scholar_free(arxiv_id) or {}
+            ss_data = {}
 
             new_p = Paper(
                 title=result.title,
