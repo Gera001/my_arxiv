@@ -50,7 +50,7 @@ class Paper(Base):
     full_text_tmp = Column(Text)
     # 修改 default
     created_at = Column(DateTime, default=get_utc_now)
-
+    chinese_title = Column(String)  # 新增字段
     favorited_by = relationship("User", secondary=user_favorites, back_populates="favorite_papers")
 
 
