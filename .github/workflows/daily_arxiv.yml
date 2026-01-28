@@ -3,7 +3,7 @@ name: ArxivMind Daily Pipeline
 on:
   schedule:
     # 北京时间每天 0:00 运行 (UTC 16:00)
-    - cron: '0 17 * * *'
+    - cron: '0 16 * * *'
   workflow_dispatch: # 允许在 GitHub 网页上手动点击按钮触发
 
 jobs:
