@@ -1,5 +1,7 @@
 import os
 import random
+from collections import defaultdict
+
 import resend
 from database import Session, Paper, User, VerificationCode, Donation, Comment, logger, user_favorites
 from sqlalchemy import func
@@ -262,7 +264,10 @@ def get_all_categories() -> list[str]:
 
 
 def send_daily_emails():
-    """发送每日订阅邮件"""
+    """
+    发送每日订阅邮件
+    修改点：按Category分类发送，展示中文名，移除引用量
+    """
     session = Session()
     try:
         users = session.query(User).filter(User.is_subscribed == True).all()
@@ -275,8 +280,9 @@ def send_daily_emails():
         logger.info(f"准备为 {len(users)} 位用户发送订阅邮件...")
 
         for user in users:
-            # 权重过滤：空则全选，不空则过滤
+            # 1. 筛选用户感兴趣的论文
             interest_list = [c.strip() for c in user.subscribed_categories.split(",") if c.strip()]
+
             if interest_list:
                 target_papers = [p for p in new_papers if p.category in interest_list]
             else:
@@ -286,33 +292,65 @@ def send_daily_emails():
                 logger.info(f"用户 {user.email} 无匹配论文，跳过")
                 continue
 
+            # 2. 按分类对论文进行分组 (Group by Category)
+            papers_by_category = defaultdict(list)
+            for p in target_papers:
+                cat = p.category if p.category else "其他"
+                papers_by_category[cat].append(p)
+
+            # 3. 构建邮件 HTML
             html = """
             <div style='background:#fdfcf0; padding:20px; font-family:serif;'>
                 <h1 style='text-align:center; color:#1a1a1a; border-bottom:2px solid #D4A373; padding-bottom:15px;'>
                     ArxivMind 每日精选
                 </h1>
+                <p style='text-align:center; color:#666; font-size:14px;'>今天为您精选了以下论文</p>
             """
 
-            for p in target_papers:
+            # 遍历分类字典生成内容
+            for category, papers in papers_by_category.items():
                 html += f"""
-                <div style='border-left: 3px solid #D4A373; padding: 15px; margin: 20px 0; background: rgba(255,255,255,0.5);'>
-                    <h3 style='margin:0 0 10px 0; color:#1a1a1a;'>{p.title}</h3>
-                    <p style='color:#666; font-size:14px;'>
-                        <span style='background:#D4A373; color:#fff; padding:2px 8px; margin-right:10px;'>{p.category}</span>
-                        引用量: {p.citation_count}
-                    </p>
-                    <p style='color:#333; line-height:1.6;'>{p.popular_science}</p>
-                    <a href='{p.url}' style='color:#D4A373; text-decoration:none;'>阅读原文 →</a>
-                </div>
+                <div style='margin-top: 30px;'>
+                    <h2 style='color:#D4A373; font-size:18px; border-bottom:1px dashed #D4A373; padding-bottom:5px; margin-bottom:15px;'>
+                        📂 {category}
+                    </h2>
                 """
 
-            html += "</div>"
+                for p in papers:
+                    # 处理标题显示：优先中文，其次英文
+                    display_title = p.chinese_title if p.chinese_title else p.title
+                    subtitle = p.title if p.chinese_title else ""
+
+                    html += f"""
+                    <div style='padding: 15px; margin: 15px 0; background: rgba(255,255,255,0.8); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                        <h3 style='margin:0 0 5px 0; color:#1a1a1a; font-size: 16px;'>{display_title}</h3>
+                        """
+
+                    if subtitle:
+                        html += f"<p style='margin:0 0 10px 0; color:#888; font-size:12px; font-style:italic;'>{subtitle}</p>"
+
+                    html += f"""
+                        <p style='color:#333; line-height:1.6; font-size:14px; margin-bottom:10px;'>{p.popular_science}</p>
+                        <div style='text-align:right;'>
+                            <a href='{p.url}' style='color:#fff; background:#D4A373; text-decoration:none; padding:4px 12px; border-radius:4px; font-size:12px;'>阅读原文 →</a>
+                        </div>
+                    </div>
+                    """
+
+                html += "</div>"  # 结束分类div
+
+            html += """
+                <div style='text-align:center; margin-top:40px; border-top:1px solid #ddd; padding-top:20px;'>
+                    <p style='color:#999; font-size:12px;'>ArxivMind AI Daily</p>
+                </div>
+            </div>
+            """
 
             try:
                 resend.Emails.send({
                     "from": "ArxivMind <onboarding@resend.dev>",
                     "to": user.email,
-                    "subject": "【ArxivMind】您的每日 AI 论文精选",
+                    "subject": f"【ArxivMind】每日精选 - {len(target_papers)}篇新论文",
                     "html": html
                 })
                 logger.info(f"邮件已发送至: {user.email}")
