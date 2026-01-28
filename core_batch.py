@@ -58,7 +58,7 @@ def fetch_new_papers():
     arxiv_client = arxiv.Client()
     search = arxiv.Search(
         query="cat:cs.AI",
-        max_results=20,
+        max_results=10,
         sort_by=arxiv.SortCriterion.SubmittedDate
     )
 
