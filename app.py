@@ -147,12 +147,20 @@ st.markdown("""
         transform: translateX(5px);
         box-shadow: 0 6px 16px rgba(0,0,0,0.06);
     }
-    .paper-title {
+.paper-title {
         font-size: 18px;
         font-weight: 700;
         color: #2c3e50;
-        margin-bottom: 10px;
+        margin-bottom: 5px; /* 减小间距，为副标题腾出空间 */
         line-height: 1.4;
+    }
+    /* 新增：英文副标题样式 */
+    .paper-subtitle {
+        font-size: 14px;
+        color: #7f8c8d;
+        font-weight: 400;
+        margin-bottom: 12px;
+        font-style: italic;
     }
     .paper-meta {
         color: #7f8c8d;
@@ -478,6 +486,11 @@ def show_paper_list():
         comments = get_paper_comments(p.id)
         comment_count = len(comments)
 
+        # === 核心修改：处理标题显示逻辑 ===
+        display_title = p.chinese_title if p.chinese_title else p.title
+        # 如果有中文名，英文名作为副标题；否则副标题为空
+        subtitle_html = f"<div class='paper-subtitle'>{p.title}</div>" if p.chinese_title else ""
+
         with st.container():
             col1, col2 = st.columns([20, 1.5])
 
@@ -496,16 +509,17 @@ def show_paper_list():
                 # 3. 组合卡片 (确保所有 HTML 都在一行或者顶格写，避免缩进)
                 # 注意：这里使用 f-string 拼接，但为了安全，外层用 div 包裹
                 card_html = f"""
-<div class='paper-card'>
-    <div class='paper-title'>{p.title}</div>
-    <div class='paper-meta'>
-        <span class='category-tag'>{p.category or '未分类'}</span>
-        <span>📅 {p.created_at.strftime('%Y-%m-%d')}</span>
-    </div>
-    {pop_science_html}
-    {keywords_html}
-</div>
-"""
+                <div class='paper-card'>
+                    <div class='paper-title'>{display_title}</div>
+                    {subtitle_html}
+                    <div class='paper-meta'>
+                        <span class='category-tag'>{p.category or '未分类'}</span>
+                        <span>📅 {p.created_at.strftime('%Y-%m-%d')}</span>
+                    </div>
+                    {pop_science_html}
+                    {keywords_html}
+                </div>
+                """
                 # 关键：unsafe_allow_html=True 必须开启
                 st.markdown(card_html, unsafe_allow_html=True)
 
@@ -669,16 +683,19 @@ def show_favorites():
     st.divider()
 
     for p in favorites:
+        # === 核心修改：处理标题显示逻辑 ===
+        display_title = p.chinese_title if p.chinese_title else p.title
+        subtitle_html = f"<div class='paper-subtitle' style='margin-bottom:8px;'>{p.title}</div>" if p.chinese_title else ""
         with st.container():
             st.markdown(f"""
-                <div class='paper-card' style='border-left-color: #e74c3c;'>
-                    <div class='paper-title'>{p.title}</div>
-                    <div class='paper-meta'>
-                        <span class='category-tag'>{p.category or '未分类'}</span>
-                        引用量: {p.citation_count or 0}
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+                            <div class='paper-card' style='border-left-color: #e74c3c;'>
+                                <div class='paper-title'>{display_title}</div>
+                                {subtitle_html}
+                                <div class='paper-meta'>
+                                    <span class='category-tag'>{p.category or '未分类'}</span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
             c1, c2 = st.columns([1, 8])
             with c1:
@@ -804,7 +821,12 @@ def show_trending():
             st.markdown(f"<h1 style='color:#D4A373; text-align:center;'>{idx + 1}</h1>", unsafe_allow_html=True)
 
         with col_content:
-            st.markdown(f"### {p.title}")
+            # === 核心修改：处理标题显示逻辑 ===
+            cn_title = p.chinese_title if p.chinese_title else p.title
+            st.markdown(f"### {cn_title}")
+            # 如果有中文名，这里额外展示英文原名
+            if p.chinese_title:
+                st.caption(f"Original: {p.title}")
             st.caption(f"发布日期: {p.created_at.strftime('%Y-%m-%d')} | 领域: {p.category}")
             st.markdown(f"_{p.popular_science[:100]}..._")
             st.link_button("👉 前往阅读", p.url)
